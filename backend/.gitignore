@@ -2,7 +2,7 @@ node_modules
 dist
 .dev.vars
 .env
-.wrangler
+wrangler.toml
 
 # Change them to your taste:
 package-lock.json

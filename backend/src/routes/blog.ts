@@ -1,9 +1,8 @@
 import { Hono } from "hono"
-import { JwtPayload, verify } from "jsonwebtoken";
-import { createBlogInput, updateBlogInput } from "../middlewares/zodValidation";
-import { Prisma } from "@prisma/client";
-import { PrismaClient } from "@prisma/client/extension";
-import { withAccelerate } from "@prisma/extension-accelerate";
+import { decode, sign, verify } from 'hono/jwt'
+import { createBlogInput, updateBlogInput } from "@chaiitanya_codes/common-app";
+import { PrismaClient } from '@prisma/client/edge'
+import { withAccelerate } from '@prisma/extension-accelerate'
 
 export const blogRouter = new Hono<{
     Bindings: {
@@ -16,25 +15,38 @@ export const blogRouter = new Hono<{
 }>();
 
 // middleware
-blogRouter.use("/*",async (c,next)=>{
-    const authHeader = c.req.header("authorization") || "";
+blogRouter.use("/*", async (c, next) => {
+    const authHeader = c.req.header('authorization') || "";
+
+    console.log(`the jwt token before split is : ${authHeader}`)
+    if (!authHeader) {
+        c.status(401);
+        return c.json({ error: "unauthorised" });
+    }
     try {
-        const user = await verify(authHeader,c.env.JWT_SECRET) as JwtPayload;
-        if(user){
-            c.set("userId",user.id);
+        console.log(`the token before split is : ${authHeader}`)
+        const token = authHeader.split(' ')[1];
+        console.log(`the token after split is : ${token}`)
+        const user = await verify(token, c.env.JWT_SECRET);
+        if (user) {
+
+            console.log(`userId to be set is ${user}`)
+
+            c.set("userId", user);
             await next();
         }
-        else{
-            c.status(403);
+        else {
+            c.status(401);
             return c.json({
                 message: "You are not logged in"
             })
         }
 
     } catch (error) {
+        console.error('Error message:', error.message);
         c.status(403);
         return c.json({
-            message: "You're not logged in"
+            message: "error while logging in"
         })
     }
 })
@@ -42,8 +54,9 @@ blogRouter.use("/*",async (c,next)=>{
 // to create the blog
 blogRouter.post('/', async (c) => {
     const body = await c.req.json();
-    const {success} = createBlogInput.safeParse(body);
-    if(!success){
+    console.log(`body gotten in post create is: ${body}`)
+    const { success } = createBlogInput.safeParse(body);
+    if (!success) {
         c.status(411);
         return c.json({
             message: "Inputs are not correct"
@@ -51,6 +64,7 @@ blogRouter.post('/', async (c) => {
     }
 
     const authorId = c.get("userId");
+    console.log(`userId is: ${authorId}`)
     const prisma = new PrismaClient({
         datasourceUrl: c.env.DATABASE_URL,
     }).$extends(withAccelerate());
@@ -63,8 +77,9 @@ blogRouter.post('/', async (c) => {
                 authorId: Number(authorId)
             }
         })
+        console.log(`blog for title : ${blog.title} has been created`)
         return c.json({
-            id: blog.id;
+            id: blog.id
         })
 
     } catch (error) {
@@ -76,8 +91,9 @@ blogRouter.post('/', async (c) => {
 // to update the blog
 blogRouter.put('/', async (c) => {
     const body = await c.req.json();
-    const {success} = updateBlogInput.safeParse(body);
-    if(!success){
+    console.log(`body gotten is: ${body}`)
+    const { success } = updateBlogInput.safeParse(body);
+    if (!success) {
         c.status(411);
         return c.json({
             message: "Inputs are not correct"
@@ -103,14 +119,13 @@ blogRouter.put('/', async (c) => {
         })
     } catch (error) {
         c.status(411);
-        return c.json({error: "error while updating blog."})
+        return c.json({ error: "error while updating blog." })
     }
-
 
 })
 
 // to show all the blogs
-blogRouter.get('/bulk',async (c) => {
+blogRouter.get('/bulk', async (c) => {
     const prisma = new PrismaClient({
         datasourceUrl: c.env.DATABASE_URL,
     }).$extends(withAccelerate());
@@ -134,7 +149,7 @@ blogRouter.get('/bulk',async (c) => {
 
     } catch (error) {
         c.status(411);
-        return c.json({error: "error while showing the blogs."})
+        return c.json({ error: "error while showing the blogs." })
     }
 
 })
@@ -169,7 +184,7 @@ blogRouter.get('/:id', async (c) => {
 
     } catch (error) {
         c.status(411);
-        return c.json({error: "error while showing the blog post."})
-        
+        return c.json({ error: "error while showing the blog post." })
+
     }
 })

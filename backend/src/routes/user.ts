@@ -1,20 +1,22 @@
-import { PrismaClient } from "@prisma/client/extension";
-import { withAccelerate } from "@prisma/extension-accelerate";
+import { PrismaClient } from '@prisma/client/edge'
+import { withAccelerate } from '@prisma/extension-accelerate'
 import { Hono } from "hono";
 import { hashPassword } from "../support_functions/hashing";
-import { generate_jwt } from "../support_functions/gen_jwt";
-import { signinInput, signupInput } from "../middlewares/zodValidation";
+import { signinInput, signupInput } from "@chaiitanya_codes/common-app"
+import { decode, sign, verify } from 'hono/jwt'
+import { HTTPException } from 'hono/http-exception';
+import { string } from 'zod';
+import { Secret } from 'jsonwebtoken';
 
 export const userRouter = new Hono<{
     Bindings: {
         DATABASE_URL: string;
-        JWT_SECRET: string;
+        JWT_SECRET: Secret;
     }
 }>();
 
 // to create a user
 userRouter.post('/signup', async (c) => {
-
 
     const body = await c.req.json();
     const { success } = signupInput.safeParse(body);
@@ -31,9 +33,9 @@ userRouter.post('/signup', async (c) => {
         }
     ).$extends(withAccelerate())
 
+    console.log("hello")
     // const body = await c.req.json();
     try {
-
 
         const non_hashed_password: string = body.password;
         // write the logic to add the hashing
@@ -46,17 +48,15 @@ userRouter.post('/signup', async (c) => {
                 name: body.name,
             }
         })
-
-        const user_id: string = user.id;
+        console.log(`user has been created ${user.username} with userid: ${user.id}`)
         //create and return a jwt using this user_id encoded and create a Jwt_secret under toml file.
-        const token = await generate_jwt(user_id, c.env.JWT_SECRET);
+        const token = await sign({ id: user.id }, c.env.JWT_SECRET)
 
-        return c.json({ token });
+        return c.text( token );
 
-    } catch (error) {
-
-        c.status(403);
-        return c.json({ error: "error while signing up." });
+    } catch (e) {
+        console.log(`the error is:`)
+        throw new HTTPException(401, { message: e.message, cause: e })
     }
 })
 
@@ -80,31 +80,34 @@ userRouter.post('/signin', async (c) => {
 
     try {
         //first create the hashed password in the same way
-        const password = body.password; 
+        const password = body.password;
         const hashed_password = await hashPassword(password);
 
         const user = await prisma.user.findUnique({
             where: {
-                username: body.username,
-                password: hashed_password
+                username: body.username
             }
         });
 
         if (!user) {
             c.status(403);
-            return c.json({ error: "user not found/password incorrect." });
+            return c.json({ error: "user not found." });
         }
-        
-        const token = await generate_jwt(user.id, c.env.JWT_SECRET);
 
-        return c.json({ token });
+        if (user.password !== hashed_password) {
+
+            c.status(400);
+            return c.json({ error: "password incorrect." });
+        }
+
+        const token = await sign(user.id.toString(), c.env.JWT_SECRET);
+
+        return c.text( token );
 
     } catch (error) {
 
         c.status(411);
-        return c.json({error: "error while signing in."})
+        return c.json({ error: "error while signing in." })
     }
 
-
 })
-
