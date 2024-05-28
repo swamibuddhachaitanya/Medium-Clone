@@ -1,6 +1,6 @@
 import { ChangeEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { SignupInput } from "@chaiitanya_codes/common-app";
+import { SignupInput } from "../types/index";
 import axios from "axios";
 import { BACKEND_URL } from "../config";
 
